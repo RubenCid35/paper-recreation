@@ -5,7 +5,6 @@ import torch.nn as nn
 #---------------------------------------------------------------
 # General Coupling Layer
 #---------------------------------------------------------------
-
 def create_model(input_size: int, hidden_size: int, n_layers: int = 4, add_norm: bool = False) -> nn.Module:
     layers = []
     sizes = [input_size] + [hidden_size] * n_layers + [input_size]

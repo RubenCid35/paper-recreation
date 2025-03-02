@@ -14,6 +14,7 @@ from modules.coupling import intercalate
 # Training Configuration
 #--------------------------------------------------------------
 MODEL_PATH: str = "./models/"
+DATA_PATH : str = "../data"
 SAVE_EPOCH: int = 5
 START: int      = 0
 
@@ -31,16 +32,20 @@ def rescale(tensor: torch.Tensor):
     ma, mi = tensor.max(), tensor.min()
     return (tensor - mi) / (ma - mi)
 
+def add_noise(tensor: torch.Tensor, strengh: float = 1):
+    noise = torch.distributions.Uniform(0., 1.).sample(tensor.shape)
+    return (tensor * 255. + strengh * noise) / (255 + strengh)
+
 transform = [
-    transforms.ToTensor(),
-    transforms.Lambda(lambda x: x.view(-1)),
-    transforms.Lambda(lambda x: x + torch.rand_like(x).div_(256.)),
-    transforms.Lambda(lambda x: rescale(x))
+    transforms.ToTensor(), # create tensor from PIL Image [0, 1]
+    transforms.Lambda(lambda x: x.view(-1)),   # flatten image (the initial model is an MLP)
+    transforms.Lambda(lambda x: add_noise(x)), # add noise (it is not very perceptible to the idea, maybe increase strength?)
+    transforms.Lambda(lambda x: rescale(x))    # rescale between  0 and 1
 ]
 transform = transforms.Compose(transform)
 
-trainset = datasets.MNIST('./data', train =  True, transform=transform, download=True)
-testset  = datasets.MNIST('./data', train = False, transform=transform, download=True)
+trainset = datasets.MNIST(DATA_PATH, train =  True, transform=transform, download=True)
+testset  = datasets.MNIST(DATA_PATH, train = False, transform=transform, download=True)
 
 # create validation dataset
 train_size, valid_size = int(len(trainset) * 0.85), int(len(trainset) * 0.15)
@@ -73,8 +78,8 @@ for e in range(START, EPOCHS + 1):
         optimizer.zero_grad()
 
         # add noise to image
-        image = image + torch.rand_like(image) / 256.
-        image = image.clamp(0, 1)
+        # image = image + torch.rand_like(image) / 256.
+        # image = image.clamp(0, 1)
         image = image.to(DEVICE) 
 
         _, log = model(image)
@@ -89,8 +94,8 @@ for e in range(START, EPOCHS + 1):
         for image, _ in tqdm(validloader, total = len(validloader), desc = "validation phase", leave = False):
 
             # add noise to image
-            image = image + torch.rand_like(image) / 256.
-            image = image.clamp(0, 1)
+            # image = image + torch.rand_like(image) / 256.
+            # image = image.clamp(0, 1)
             image = image.to(DEVICE) 
 
             _, log = model(image)
@@ -98,9 +103,13 @@ for e in range(START, EPOCHS + 1):
             log = - log.mean()
             valid_log -= log.detach().item()
 
-    print(f"[epoch {e:>03}] train log-like: {train_log / len(trainloader):15.3f}  valid log-like: {valid_log / len(validloader):15.3f}", end = " ")
+    print(f"[epoch {e:>03}] train log-like: {train_log / len(trainloader):15.3f}  valid log-like: {valid_log / len(validloader):15.3f}", end = "")
     if e % SAVE_EPOCH == 0:
         save_path = os.path.join(MODEL_PATH, f"nice-{e:03d}.pt")
         torch.save(model.state_dict(), save_path)
-        print(f"save model: {save_path}", end = "")
+        print(f" save model: {save_path}", end = "")
     print()
+
+save_path = os.path.join(MODEL_PATH, f"nice-{e:03d}.pt")
+torch.save(model.state_dict(), save_path)
+print("final model path:", save_path)
